@@ -41,6 +41,8 @@ def parse_args():
     parser.add_argument("--num_seeds", type=int, default=1)
     parser.add_argument("--mask_ref_images", type=bool, default=False)
     parser.add_argument("--just_seed", type=int, default=None)
+    parser.add_argument("--sampling", type=str, default="sequential", choices=["sequential", "random"],
+                        help="How to pick few-shot reference samples: 'sequential' (original, consecutive sorted filenames) or 'random' (seeded random draw).")
     parser.add_argument('--save_examples', default=True, action=argparse.BooleanOptionalAction, help="Save example plots.")
     parser.add_argument("--eval_clf", default=True, action=argparse.BooleanOptionalAction, help="Evaluate anomaly detection performance.")
     parser.add_argument("--eval_segm", default=False, action=argparse.BooleanOptionalAction, help="Evaluate anomaly segmentation performance.")
@@ -80,6 +82,8 @@ if __name__=="__main__":
 
         results_dir = f"results_{args.dataset}/{args.model_name}_{args.resolution}/{shot}-shot_preprocess={args.preprocess}"
         
+        if args.sampling != "sequential":
+            results_dir += f"_sampling={args.sampling}"
         if args.tag != None:
             results_dir += "_" + args.tag
         plots_dir = results_dir
@@ -137,6 +141,7 @@ if __name__=="__main__":
                                                                                 mask_ref_images = args.mask_ref_images,
                                                                                 rotation = rotation_default[object_name],
                                                                                 seed = seed,
+                                                                                sampling = args.sampling,
                                                                                 save_patch_dists = args.eval_clf, # save patch distances for detection evaluation
                                                                                 save_tiffs = args.eval_segm)      # save anomaly maps as tiffs for segmentation evaluation
                         

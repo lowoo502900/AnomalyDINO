@@ -6,6 +6,7 @@ from tqdm import tqdm
 import faiss
 import tifffile as tiff
 import time
+import zlib
 import torch
 
 from src.utils import augment_image, dists2map, plot_ref_images
@@ -26,6 +27,7 @@ def run_anomaly_detection(
         knn_neighbors = 1,
         faiss_on_cpu = False,
         seed = 0,
+        sampling = "sequential",
         save_patch_dists = True,
         save_tiffs = False):
     """
@@ -44,11 +46,15 @@ def run_anomaly_detection(
     - knn_metric: The metric to use for kNN search. Default is 'L2_normalized' (1 - cosine similarity)
     - knn_neighbors: The number of nearest neighbors to consider. Default is 1.
     - seed: The seed value for deterministic sampling in few-shot setting. Default is 0.
+    - sampling: How to pick the k reference samples in the few-shot setting.
+        'sequential' (original): consecutive block of sorted filenames, [seed*k : (seed+1)*k].
+        'random': k samples drawn without replacement, reproducible given (seed, object_name).
     - save_patch_dists: Whether to save the patch distances. Default is True. Required to eval detection.
     - save_tiffs: Whether to save the anomaly maps as TIFF files. Default is False. Required to eval segmentation.
     """
 
     assert knn_metric in ["L2", "L2_normalized"]
+    assert sampling in ["sequential", "random"]
     
     type_anomalies = object_anomalies[object_name]
     # add 'good' to the anomaly types, if exists...
@@ -73,7 +79,19 @@ def run_anomaly_detection(
         img_ref_samples = sorted(os.listdir(img_ref_folder))
     else:
         # few-shot setting, pick samples in deterministic fashion according to seed
-        img_ref_samples = sorted(os.listdir(img_ref_folder))[seed*n_ref_samples:(seed + 1)*n_ref_samples]
+        all_ref_samples = sorted(os.listdir(img_ref_folder))  # sort first so the order is OS-independent
+        if sampling == "sequential":
+            img_ref_samples = all_ref_samples[seed*n_ref_samples:(seed + 1)*n_ref_samples]
+        else:
+            # random but reproducible: same (seed, object) -> same references, independent across objects
+            rng = np.random.default_rng([seed, zlib.crc32(object_name.encode())])
+            idx = rng.choice(len(all_ref_samples), size=min(n_ref_samples, len(all_ref_samples)), replace=False)
+            img_ref_samples = [all_ref_samples[i] for i in sorted(idx)]
+
+        # log which reference images were used (for reproducibility / paired comparisons)
+        os.makedirs(plots_dir, exist_ok=True)
+        with open(f"{plots_dir}/ref_samples_seed={seed}.txt", "a") as f:
+            f.write(f"{object_name}: {', '.join(img_ref_samples)}\n")
 
     if len(img_ref_samples) < n_ref_samples:
         print(f"Warning: Not enough reference samples for {object_name}! Only {len(img_ref_samples)} samples available.")
