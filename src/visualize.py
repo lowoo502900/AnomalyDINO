@@ -91,5 +91,6 @@ def create_sample_plots(experiment_path, anomaly_maps_dir, seed, dataset, data_r
                 axs[n, j].set_title(f"good test samples (for comparison)")
 
         plt.tight_layout()
+        os.makedirs(f"{experiment_path}/{object_name}", exist_ok=True)
         plt.savefig(f"{experiment_path}/{object_name}/anomaly_maps_examples_seed={seed}.png")
         plt.close()
